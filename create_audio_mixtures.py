@@ -5,7 +5,7 @@ import soundfile as sf
 
 GRID_ROOT = "GRID"
 SPEAKERS = ["s1", "s2", "s3"]   # can extend later
-SNR_DB = 0.0                   # 0 dB mixing
+SNR_DB = -5
 
 
 def rms(x):
