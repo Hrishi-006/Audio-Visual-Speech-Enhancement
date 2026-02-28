@@ -7,7 +7,8 @@ Goal- Enhance the speech of a target speaker in a single-channel multi-speaker e
 ..
 
 
-#How to run
+**How to run**
+
 Download GRID dataset from: http://spandh.dcs.shef.ac.uk/gridcorpus/
 Download the .mpg files.
 
