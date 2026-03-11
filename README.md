@@ -14,10 +14,18 @@ Download the .mpg files.
 
 Extract audio by running extract_audio.sh
 
-Extract landmarks by running extract_landmarks_batch which stores the landmarks motion vectors in npy files with each file storing the motion vectors in a shape of (75, 478, 3).
+Extract landmarks by running extract_relevant_landmarks which stores the landmarks motion vectors of lips and jaw in npy files with each file storing the motion vectors in a shape of (75, 103, 3).
 
 Create mixed audio for training by running create_audio_mixtures.py which adds the audio from another randomly chosen file.
 
-Run unsample.py to unsample the landmarks from 25fps to 100fps
+Run vid_preprocessing.py to remove the z coordinate data and unsample the landmarks from 25fps to 100fps
 
-Run audio_preprocessing.py to sample the audio to 100 from 16000 samples per second and apply power compression law and normalization.
+Run audio_pre.py to sample the mixed audio to 100 from 16000 samples per second and apply power compression law and normalization.
+Run audio_clean_pre to do the same for the clean audio files.
+
+Run iam.py to calculate the ideal iam( Ideal Amplitude Mask)
+
+Run av_concat.py to concatenate the preprocessed audio and video for training.
+
+
+
