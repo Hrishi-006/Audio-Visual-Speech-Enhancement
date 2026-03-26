@@ -46,7 +46,7 @@ def compute_iam_for_speaker(speaker, base_dir="grid"):
         print(f"Saved IAM: {iam_path} | shape: {iam.shape} | max: {iam.max():.4f}")
 
 # Run for all speakers
-speakers = ["s1", "s2", "s3"]
+speakers = ["s1","s2","s3","s4", "s5", "s6","s7","s8","s9","s10"]
 for speaker in speakers:
     print(f"\nProcessing speaker: {speaker}")
     compute_iam_for_speaker(speaker, base_dir="grid")
