@@ -21,6 +21,13 @@ def compute_iam_for_speaker(speaker, base_dir="grid"):
     clean_files = sorted(os.listdir(clean_dir))
     mixed_files = sorted(os.listdir(mixed_dir))
 
+    stats_path = os.path.join(base_dir, speaker, "norm_stats.npy")
+    if not os.path.exists(stats_path):
+        raise FileNotFoundError(f"Missing norm stats for {speaker}: {stats_path}")
+    stats = np.load(stats_path, allow_pickle=True).item()
+    mean = stats["mean"]
+    std = stats["std"]
+
     # Verify files match
     assert clean_files == mixed_files, \
         f"Mismatch between clean and mixed files for speaker {speaker}!"
@@ -32,12 +39,17 @@ def compute_iam_for_speaker(speaker, base_dir="grid"):
         clean_path = os.path.join(clean_dir, filename)
         mixed_path = os.path.join(mixed_dir, filename)
 
-        clean_spec = np.load(clean_path)   # shape: (freq_bins, time_frames)
-        mixed_spec = np.load(mixed_path)
+        # Load normalized compressed magnitudes
+        clean_spec_norm = np.load(clean_path)   # expected (T, F)
+        mixed_spec_norm = np.load(mixed_path)
 
         # Shapes must match
-        assert clean_spec.shape == mixed_spec.shape, \
-            f"Shape mismatch for {filename}: clean {clean_spec.shape} vs mixed {mixed_spec.shape}"
+        assert clean_spec_norm.shape == mixed_spec_norm.shape, \
+            f"Shape mismatch for {filename}: clean {clean_spec_norm.shape} vs mixed {mixed_spec_norm.shape}"
+
+        # De-normalize to shared compressed-magnitude space before IAM
+        clean_spec = (clean_spec_norm * std) + mean
+        mixed_spec = (mixed_spec_norm * std) + mean
 
         iam = compute_iam(clean_spec, mixed_spec)
 
