@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import argparse
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -47,6 +48,30 @@ class AVConcatDataset(Dataset):
         clean = torch.tensor(np.load(sample["clean"]), dtype=torch.float32)  # (time_frames, freq_bins)
         return av, iam, mixed, clean
     
+
+class SyntheticAVConcatDataset(Dataset):
+    def __init__(self, num_samples=8, min_frames=10, max_frames=20, av_dim=393, freq_bins=257):
+        self.samples = []
+        for _ in range(num_samples):
+            t = np.random.randint(min_frames, max_frames + 1)
+            av = np.random.randn(t, av_dim).astype(np.float32)
+            mixed = np.random.randn(t, freq_bins).astype(np.float32)
+            iam = np.clip(np.random.rand(t, freq_bins).astype(np.float32) * 2.0, 0.0, 10.0)
+            clean = iam * mixed
+            self.samples.append((av, iam, mixed, clean))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        av, iam, mixed, clean = self.samples[idx]
+        return (
+            torch.tensor(av, dtype=torch.float32),
+            torch.tensor(iam, dtype=torch.float32),
+            torch.tensor(mixed, dtype=torch.float32),
+            torch.tensor(clean, dtype=torch.float32),
+        )
+
 
 
 
@@ -127,12 +152,17 @@ def collate_fn(batch):
 # ─────────────────────────────────────────
 # Training
 # ─────────────────────────────────────────
-def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4):
+def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4, test_mode=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    train_dataset = AVConcatDataset(speakers_train, base_dir)
-    val_dataset   = AVConcatDataset(speakers_val,   base_dir)
+    if test_mode:
+        train_dataset = SyntheticAVConcatDataset(num_samples=max(batch_size, 4))
+        val_dataset = SyntheticAVConcatDataset(num_samples=max(batch_size, 4))
+        print("Running in test mode with synthetic in-memory data.")
+    else:
+        train_dataset = AVConcatDataset(speakers_train, base_dir)
+        val_dataset = AVConcatDataset(speakers_val, base_dir)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,  collate_fn=collate_fn)
     val_loader   = DataLoader(val_dataset,   batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
@@ -212,14 +242,20 @@ def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4)
 
 
 
-# ─────────────────────────────────────────
-# Run
-# ─────────────────────────────────────────
-train(
-    speakers_train=["s1", "s2","s3","s4", "s5", "s6","s7","s8"],
-    speakers_val=["s9","s10"],
-    base_dir=base_dir,
-    epochs=50,
-    batch_size=8,
-    lr=1e-3
-)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--test-mode", action="store_true", help="Run a quick synthetic-data training pass without external files.")
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    args = parser.parse_args()
+
+    train(
+        speakers_train=["s1", "s2","s3","s4", "s5", "s6","s7","s8"],
+        speakers_val=["s9","s10"],
+        base_dir=base_dir,
+        epochs=1 if args.test_mode else args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        test_mode=args.test_mode,
+    )
