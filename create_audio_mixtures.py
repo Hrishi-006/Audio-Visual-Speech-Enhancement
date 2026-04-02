@@ -27,7 +27,10 @@ def mix_audio(target, interferer, snr_db=0.0):
     target_rms = rms(target)
     interferer_rms = rms(interferer)
 
-    interferer = interferer * (target_rms / (interferer_rms + 1e-8))
+    # Scale interferer to requested SNR:
+    # SNR(dB) = 20*log10(target_rms / interferer_rms_scaled)
+    desired_interferer_rms = target_rms / (10 ** (snr_db / 20.0))
+    interferer = interferer * (desired_interferer_rms / (interferer_rms + 1e-8))
     mixed = target + interferer
 
     # Optional: prevent clipping

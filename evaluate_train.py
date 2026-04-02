@@ -10,6 +10,11 @@ import os
 from pesq import pesq
 from mir_eval.separation import bss_eval_sources
 
+def match_rms(reference, signal):
+    ref_rms = np.sqrt(np.mean(reference ** 2) + 1e-8)
+    sig_rms = np.sqrt(np.mean(signal ** 2) + 1e-8)
+    return signal * (ref_rms / sig_rms)
+
 # ─────────────────────────────────────────
 # Model Definition
 # ─────────────────────────────────────────
@@ -78,9 +83,6 @@ def reconstruct_waveform(speaker, filename, base_dir, model, device, stats_cache
     reconstructed = pred_clean_T * np.exp(1j * phase)
     enhanced_wav  = librosa.istft(reconstructed, hop_length=160, win_length=400)
 
-    # Normalize
-    enhanced_wav = enhanced_wav / (np.max(np.abs(enhanced_wav)) + 1e-8)
-
     return enhanced_wav, mixed_wav
 
 def load_clean_wav(speaker, filename, base_dir):
@@ -106,8 +108,8 @@ def compute_pesq_score(clean, enhanced, sr=16000):
     min_len  = min(len(clean), len(enhanced))
     clean    = clean[:min_len]
     enhanced = enhanced[:min_len]
-    # narrow band mode as per paper
-    score = pesq(sr, clean, enhanced, 'nb')
+    mode = 'wb' if sr == 16000 else 'nb'
+    score = pesq(sr, clean, enhanced, mode)
     return score
 
 def compute_sdr_noisy(clean, mixed):
@@ -152,6 +154,8 @@ def evaluate(test_speakers, base_dir, model, device):
                 clean_wav    = clean_wav[:min_len]
                 enhanced_wav = enhanced_wav[:min_len]
                 mixed_wav    = mixed_wav[:min_len]
+                enhanced_wav = match_rms(clean_wav, enhanced_wav)
+                mixed_wav    = match_rms(clean_wav, mixed_wav)
 
                 # Compute metrics
                 sdr_n  = compute_sdr_noisy(clean_wav, mixed_wav)

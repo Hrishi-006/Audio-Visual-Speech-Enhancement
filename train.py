@@ -3,6 +3,7 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+import torch.nn.functional as F
 
 # Your data will be at
 base_dir = "/kaggle/input/datasets/hrishikesh3983/speakers-10-2/a"
@@ -83,9 +84,6 @@ class AVConcatBLSTM(nn.Module):
 
 
 
-import torch
-import torch.nn.functional as F
-
 def collate_fn(batch):
     avs, iams, mixeds, cleans = zip(*batch)
 
@@ -96,8 +94,10 @@ def collate_fn(batch):
     iams_padded   = []
     mixeds_padded = []
     cleans_padded = []
+    lengths       = []
 
     for av, iam, mixed, clean in zip(avs, iams, mixeds, cleans):
+        lengths.append(av.shape[0])
         av_pad    = F.pad(av,    (0, 0, 0, max_len - av.shape[0]))
         iam_pad   = F.pad(iam,   (0, 0, 0, max_len - iam.shape[0]))
         mixed_pad = F.pad(mixed, (0, 0, 0, max_len - mixed.shape[0]))
@@ -108,7 +108,13 @@ def collate_fn(batch):
         mixeds_padded.append(mixed_pad)
         cleans_padded.append(clean_pad)
 
-    return torch.stack(avs_padded), torch.stack(iams_padded), torch.stack(mixeds_padded), torch.stack(cleans_padded)
+    return (
+        torch.stack(avs_padded),
+        torch.stack(iams_padded),
+        torch.stack(mixeds_padded),
+        torch.stack(cleans_padded),
+        torch.tensor(lengths, dtype=torch.long),
+    )
 
 
 
@@ -126,8 +132,8 @@ def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4)
 
     train_dataset = AVConcatDataset(speakers_train, base_dir)
     val_dataset   = AVConcatDataset(speakers_val,   base_dir)
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True,  collate_fn=collate_fn)
-    val_loader   = DataLoader(val_dataset,   batch_size=8, shuffle=False, collate_fn=collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,  collate_fn=collate_fn)
+    val_loader   = DataLoader(val_dataset,   batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
     # input_size = 136 landmarks + 257 freq_bins
     input_size = train_dataset[0][0].shape[1]
@@ -135,27 +141,37 @@ def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4)
 
     model     = AVConcatBLSTM(input_size=input_size, hidden_size=250, num_layers=3, freq_bins=freq_bins).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
-
     best_val_loss = float("inf")
     patience      = 10
     patience_counter = 0
+
+    def masked_mse(pred, target, lengths):
+        # pred/target: (B, T, F), lengths: (B,)
+        bsz, max_t, _ = pred.shape
+        time_idx = torch.arange(max_t, device=pred.device).unsqueeze(0)  # (1, T)
+        mask = time_idx < lengths.unsqueeze(1)                            # (B, T)
+        mask = mask.unsqueeze(-1)                                          # (B, T, 1)
+        sqerr = (pred - target) ** 2
+        sqerr = sqerr * mask
+        denom = mask.sum() * pred.shape[-1]
+        return sqerr.sum() / torch.clamp(denom, min=1)
 
     for epoch in range(epochs):
         # ── Train ──
         model.train()
         train_loss = 0.0
-        for av, iam, mixed, clean in train_loader:
-            av, iam, mixed, clean = av.to(device), iam.to(device), mixed.to(device), clean.to(device)
+        for av, iam, mixed, clean, lengths in train_loader:
+            av, iam, mixed, clean, lengths = av.to(device), iam.to(device), mixed.to(device), clean.to(device), lengths.to(device)
 
             optimizer.zero_grad()
             pred_iam = model(av)                        # (batch, time_frames, freq_bins)
 
             # Loss in spectrogram domain
             pred_clean = pred_iam * mixed               # estimated clean spec
-            loss = criterion(pred_clean, clean)
+            loss = masked_mse(pred_clean, clean, lengths)
 
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             train_loss += loss.item()
 
@@ -165,11 +181,11 @@ def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4)
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for av, iam, mixed, clean in val_loader:
-                av, iam, mixed, clean = av.to(device), iam.to(device), mixed.to(device), clean.to(device)
+            for av, iam, mixed, clean, lengths in val_loader:
+                av, iam, mixed, clean, lengths = av.to(device), iam.to(device), mixed.to(device), clean.to(device), lengths.to(device)
                 pred_iam   = model(av)
                 pred_clean = pred_iam * mixed
-                loss       = criterion(pred_clean, clean)
+                loss       = masked_mse(pred_clean, clean, lengths)
                 val_loss  += loss.item()
 
         val_loss /= len(val_loader)
