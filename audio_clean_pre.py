@@ -17,6 +17,16 @@ WIN_LENGTH = 400           # 25 ms × 16000 Hz = 400 samples
 HOP_LENGTH = 160           # 10 ms × 16000 Hz = 160 samples
 POWER_LAW_P = 0.3          # Power-law compression exponent
 
+def load_mixed_stats(base_dir, speaker):
+    stats_path = os.path.join(base_dir, speaker, "norm_stats.npy")
+    if not os.path.exists(stats_path):
+        raise FileNotFoundError(
+            f"Missing mixed-audio normalization stats for {speaker}: {stats_path}. "
+            "Generate norm_stats.npy from mixed audio preprocessing first."
+        )
+    stats = np.load(stats_path, allow_pickle=True).item()
+    return stats["mean"], stats["std"]
+
 # ──────────────────────────────────────────────
 # Per-Speaker Statistics (Pass 1)
 # ──────────────────────────────────────────────
@@ -142,13 +152,12 @@ def main():
         print(f"Speaker: {subdir}  ({len(wav_files)} files)")
         print(f"{'='*60}")
 
-        # ── Pass 1: gather per-speaker statistics ──
-        print(f"  Pass 1 — Computing per-speaker mean & std ...")
-        speaker_mean, speaker_std, n_frames = compute_speaker_stats(input_dir)
-        print(f"           {n_frames:,} total frames across {len(wav_files)} files")
-
-        if speaker_mean is None:
-            print(f"  [ERROR] Could not compute stats for {subdir}")
+        # Load mixed-domain stats so clean/mixed share the same normalization space
+        try:
+            speaker_mean, speaker_std = load_mixed_stats(BASE_DIR, subdir)
+            print(f"  Loaded mixed-domain stats from {subdir}/norm_stats.npy")
+        except Exception as e:
+            print(f"  [ERROR] Could not load mixed-domain stats for {subdir}: {e}")
             continue
 
         # ── Pass 2: process, normalize, save ──
