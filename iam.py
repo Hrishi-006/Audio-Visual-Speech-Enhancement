@@ -43,9 +43,13 @@ def compute_iam_for_speaker(speaker, base_dir="grid"):
         clean_spec_norm = np.load(clean_path)   # expected (T, F)
         mixed_spec_norm = np.load(mixed_path)
 
-        # Shapes must match
+        # Shapes must match and be time-major (T, F)
         assert clean_spec_norm.shape == mixed_spec_norm.shape, \
             f"Shape mismatch for {filename}: clean {clean_spec_norm.shape} vs mixed {mixed_spec_norm.shape}"
+        assert clean_spec_norm.ndim == 2, \
+            f"Expected 2D spectrogram for {filename}, got {clean_spec_norm.shape}"
+        assert clean_spec_norm.shape[1] == mean.shape[0], \
+            f"Expected freq bins {mean.shape[0]} in axis 1 for {filename}, got shape {clean_spec_norm.shape}"
 
         # De-normalize to shared compressed-magnitude space before IAM
         clean_spec = (clean_spec_norm * std) + mean

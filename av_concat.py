@@ -11,10 +11,10 @@ def _to_time_major(mixed, target_time_frames):
     if mixed.shape[1] == target_time_frames:
         return mixed.T
 
-    # Fallback: choose orientation with closer time dimension
-    d0 = abs(mixed.shape[0] - target_time_frames)
-    d1 = abs(mixed.shape[1] - target_time_frames)
-    return mixed if d0 <= d1 else mixed.T
+    raise ValueError(
+        f"Cannot align mixed spectrogram shape {mixed.shape} with landmark time frames "
+        f"{target_time_frames}. Expected one axis to match exactly."
+    )
 
 def concatenate_av_features(speaker, base_dir="grid"):
     landmark_dir = os.path.join(base_dir, speaker, "landmarks_preprocessed")
@@ -53,10 +53,19 @@ def concatenate_av_features(speaker, base_dir="grid"):
         np.save(concat_path, av_concat)
         print(f"Saved: {concat_path} | shape: {av_concat.shape}")
 
-# Run for all speakers
-speakers = [f"s{i}" for i in range(1, 11)]
+# Run for all speakers found in base_dir (GRID convention: s1, s2, ...)
+base_dir = "grid"
+speakers = sorted(
+    d for d in os.listdir(base_dir)
+    if d.startswith("s") and os.path.isdir(os.path.join(base_dir, d))
+)
+if not speakers:
+    raise ValueError(
+        f"No speaker directories found in {base_dir}. "
+        "Expected GRID-style directories named like s1, s2, ..."
+    )
 for speaker in speakers:
     print(f"\nProcessing speaker: {speaker}")
-    concatenate_av_features(speaker, base_dir="grid")
+    concatenate_av_features(speaker, base_dir=base_dir)
 
 print("\nDone! AV concat features saved for all speakers.")

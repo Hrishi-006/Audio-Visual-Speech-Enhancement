@@ -108,7 +108,12 @@ def compute_pesq_score(clean, enhanced, sr=16000):
     min_len  = min(len(clean), len(enhanced))
     clean    = clean[:min_len]
     enhanced = enhanced[:min_len]
-    mode = 'wb' if sr == 16000 else 'nb'
+    if sr == 16000:
+        mode = 'wb'
+    elif sr == 8000:
+        mode = 'nb'
+    else:
+        raise ValueError(f"Unsupported PESQ sample rate: {sr}. Use 8000 or 16000.")
     score = pesq(sr, clean, enhanced, mode)
     return score
 

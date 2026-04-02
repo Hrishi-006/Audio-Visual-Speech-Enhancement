@@ -22,7 +22,7 @@ def load_mixed_stats(base_dir, speaker):
     if not os.path.exists(stats_path):
         raise FileNotFoundError(
             f"Missing mixed-audio normalization stats for {speaker}: {stats_path}. "
-            "Run save_stats.py on audio_mixed first."
+            "Generate norm_stats.npy from mixed audio preprocessing first."
         )
     stats = np.load(stats_path, allow_pickle=True).item()
     return stats["mean"], stats["std"]

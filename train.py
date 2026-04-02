@@ -10,6 +10,7 @@ base_dir = "/kaggle/input/datasets/hrishikesh3983/speakers-10-2/a"
 
 # Output/saved models go here
 save_path = "/kaggle/working/best_av_concat_model.pth"
+MAX_GRAD_NORM = 5.0
 
 
 
@@ -153,8 +154,8 @@ def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4)
         mask = mask.unsqueeze(-1)                                          # (B, T, 1)
         sqerr = (pred - target) ** 2
         sqerr = sqerr * mask
-        denom = mask.sum() * pred.shape[-1]
-        return sqerr.sum() / torch.clamp(denom, min=1)
+        total_valid_elements = mask.sum().float() * pred.shape[-1]
+        return sqerr.sum() / torch.clamp(total_valid_elements, min=1e-8)
 
     for epoch in range(epochs):
         # ── Train ──
@@ -171,7 +172,7 @@ def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4)
             loss = masked_mse(pred_clean, clean, lengths)
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=MAX_GRAD_NORM)
             optimizer.step()
             train_loss += loss.item()
 
