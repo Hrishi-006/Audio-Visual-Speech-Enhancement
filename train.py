@@ -12,6 +12,11 @@ base_dir = "/kaggle/input/datasets/hrishikesh3983/speakers-10-2/a"
 # Output/saved models go here
 save_path = "/kaggle/working/best_av_concat_model.pth"
 MAX_GRAD_NORM = 5.0
+SYNTHETIC_MAX_IAM = 2.0
+SYNTHETIC_EPS = 1e-8
+SYNTHETIC_TRAIN_MULTIPLIER = 2
+SYNTHETIC_MIN_TRAIN_SAMPLES = 8
+SYNTHETIC_MIN_VAL_SAMPLES = 4
 
 
 
@@ -55,9 +60,10 @@ class SyntheticAVConcatDataset(Dataset):
         for _ in range(num_samples):
             t = np.random.randint(min_frames, max_frames + 1)
             av = np.random.randn(t, av_dim).astype(np.float32)
-            mixed = np.random.randn(t, freq_bins).astype(np.float32)
-            iam = np.clip(np.random.rand(t, freq_bins).astype(np.float32) * 2.0, 0.0, 10.0)
-            clean = iam * mixed
+            clean = np.random.randn(t, freq_bins).astype(np.float32)
+            noise = np.random.randn(t, freq_bins).astype(np.float32) * 0.3
+            mixed = clean + noise
+            iam = np.clip(np.abs(clean) / (np.abs(mixed) + SYNTHETIC_EPS), 0.0, SYNTHETIC_MAX_IAM).astype(np.float32)
             self.samples.append((av, iam, mixed, clean))
 
     def __len__(self):
@@ -157,8 +163,10 @@ def train(speakers_train, speakers_val, base_dir, epochs, batch_size=8, lr=1e-4,
     print(f"Using device: {device}")
 
     if test_mode:
-        train_dataset = SyntheticAVConcatDataset(num_samples=max(batch_size, 4))
-        val_dataset = SyntheticAVConcatDataset(num_samples=max(batch_size, 4))
+        train_dataset = SyntheticAVConcatDataset(
+            num_samples=max(batch_size * SYNTHETIC_TRAIN_MULTIPLIER, SYNTHETIC_MIN_TRAIN_SAMPLES)
+        )
+        val_dataset = SyntheticAVConcatDataset(num_samples=max(batch_size, SYNTHETIC_MIN_VAL_SAMPLES))
         print("Running in test mode with synthetic in-memory data.")
     else:
         train_dataset = AVConcatDataset(speakers_train, base_dir)
