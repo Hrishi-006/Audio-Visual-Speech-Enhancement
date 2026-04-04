@@ -27,11 +27,11 @@ Run iam.py to calculate the ideal iam( Ideal Amplitude Mask)
 Run av_concat.py to concatenate the preprocessed audio and video for training.
 
 train.py trains the model using a BLSTM with 3 stacked layers and 250 hidden units.
-For a minimal smoke test without dataset files: `python train.py --test-mode`
+
 
 Recreate.py uses the best_av_concat_pth model thus formed and recreates a clean waveforms from the mixed waveform.
 
-Evaluate_train is used to calculate the metrics SDR and PESQ for hte train data.
+Evaluate_train is used to calculate the metrics SDR and PESQ for the train data.
 
 
 
